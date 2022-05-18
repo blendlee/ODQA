@@ -118,22 +118,11 @@ def main():
     p_embs = torch.Tensor(p_embs).squeeze()  # (num_passage, emb_dim)
     print(p_embs.size(), q_emb.size())
 
-    torch.save(p_embs,'/opt/ml/input/code/dense_embeds/dense_embedding.pth')
-    print("Embedding passage saved.")
-
-    print('passage tokenizing done!!!!')
-
-
-
     length = len(val_dataset['context'])
-        
     dot_prod_scores = torch.matmul(q_emb, torch.transpose(p_embs, 0, 1))
     print(dot_prod_scores.size())
 
     rank = torch.argsort(dot_prod_scores, dim=1, descending=True).squeeze()
-    print(dot_prod_scores)
-    print(rank)
-    print(rank.size())
     torch.save(rank,'/opt/ml/input/code/rank.pth')
     
 
@@ -197,7 +186,6 @@ def train(args,num_neg, dataset, p_model, q_model):
         steps=0
 
         for step, batch in enumerate(epoch_iterator):
-            steps+=1
             q_model.train()
             p_model.train()
             
@@ -212,26 +200,22 @@ def train(args,num_neg, dataset, p_model, q_model):
             q_inputs = {'input_ids': batch[3],
                         'attention_mask': batch[4],
                         'token_type_ids': batch[5]}
-            #t_inputs = {'input_ids': batch[6],
-            #            'attention_mask': batch[7],
-            #            'token_type_ids': batch[8]}
+                        
             p_outputs = p_model(**p_inputs)  # (batch_size, emb_dim)
             q_outputs = q_model(**q_inputs)  # (batch_size, emb_dim)
-            #t_outputs = 
-
 
             # Calculate similarity score & loss
-            sim_scores = torch.matmul(q_outputs, torch.transpose(p_outputs, 0, 1))  # (batch_size, emb_dim) x (emb_dim, batch_size) = (batch_size, batch_size)
+            sim_scores = torch.matmul(q_outputs, torch.transpose(p_outputs, 0, 1))  
+            # (batch_size, emb_dim) x (emb_dim, batch_size) = (batch_size, batch_size)
 
-            # target: position of positive samples = diagonal element 
+
             targets = torch.arange(0, args.per_device_train_batch_size).long()
             if torch.cuda.is_available():
                 targets = targets.to('cuda')
 
             sim_scores = F.log_softmax(sim_scores, dim=1)
-
             loss = F.nll_loss(sim_scores, targets)
-            #print(loss)
+
             total_loss+=loss
             loss.backward()
             optimizer.step()

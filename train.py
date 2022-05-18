@@ -4,7 +4,7 @@ import sys
 from typing import NoReturn
 
 from arguments import DataTrainingArguments, ModelArguments
-from datasets import DatasetDict, load_from_disk, load_metric
+from datasets import DatasetDict, load_from_disk, load_metric, load_dataset,concatenate_datasets
 from trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
@@ -16,6 +16,7 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
+from QAmodel import *
 from utils_qa import check_no_error, postprocess_qa_predictions
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,8 @@ def main():
     # training_args.per_device_train_batch_size = 4
     # print(training_args.per_device_train_batch_size)
     training_args.num_train_epochs=3
+    training_args.per_device_train_batch_size =32
+    training_args.label_names = ["start_positions", "end_positions"]
     print(f"model is from {model_args.model_name_or_path}")
     print(f"data is from {data_args.dataset_name}")
 
@@ -51,6 +54,7 @@ def main():
     set_seed(training_args.seed)
 
     datasets = load_from_disk(data_args.dataset_name)
+    #datasets = load_dataset("squad_kor_v1")
     print(datasets)
 
     # AutoConfig를 이용하여 pretrained model 과 tokenizer를 불러옵니다.
@@ -69,6 +73,8 @@ def main():
         # rust version이 비교적 속도가 빠릅니다.
         use_fast=True,
     )
+
+    
     model = AutoModelForQuestionAnswering.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -104,6 +110,7 @@ def run_mrc(
     else:
         column_names = datasets["validation"].column_names
 
+
     question_column_name = "question" if "question" in column_names else column_names[0]
     context_column_name = "context" if "context" in column_names else column_names[1]
     answer_column_name = "answers" if "answers" in column_names else column_names[2]
@@ -129,7 +136,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            #return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=True,
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
@@ -142,6 +149,7 @@ def run_mrc(
         # 데이터셋에 "start position", "enc position" label을 부여합니다.
         tokenized_examples["start_positions"] = []
         tokenized_examples["end_positions"] = []
+
 
         for i, offsets in enumerate(offset_mapping):
             input_ids = tokenized_examples["input_ids"][i]
@@ -198,8 +206,10 @@ def run_mrc(
     if training_args.do_train:
         if "train" not in datasets:
             raise ValueError("--do_train requires a train dataset")
-        train_dataset = datasets["train"]
 
+        train_dataset = datasets['train']
+        valid_dataset = datasets['validation']
+        train_dataset = concatenate_datasets([train_dataset,valid_dataset])
         # dataset에서 train feature를 생성합니다.
         train_dataset = train_dataset.map(
             prepare_train_features,
@@ -208,6 +218,7 @@ def run_mrc(
             remove_columns=column_names,
             load_from_cache_file=not data_args.overwrite_cache,
         )
+
 
     # Validation preprocessing
     def prepare_validation_features(examples):
@@ -221,7 +232,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=True, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
@@ -232,10 +243,12 @@ def run_mrc(
         # corresponding example_id를 유지하고 offset mappings을 저장해야합니다.
         tokenized_examples["example_id"] = []
 
+
         for i in range(len(tokenized_examples["input_ids"])):
             # sequence id를 설정합니다 (to know what is the context and what is the question).
             sequence_ids = tokenized_examples.sequence_ids(i)
             context_index = 1 if pad_on_right else 0
+
 
             # 하나의 example이 여러개의 span을 가질 수 있습니다.
             sample_index = sample_mapping[i]

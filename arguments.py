@@ -9,19 +9,23 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="klue/bert-base",
+        default='monologg/koelectra-base-v3-finetuned-korquad',
+                #'klue/bert-base',
+                #xlm-roberta-base/large
+                #monologg/koelectra-base-v3-finetuned-korquad
+
         metadata={
             "help": "Path to pretrained model or model identifier from huggingface.co/models"
         },
     )
     config_name: Optional[str] = field(
-        default=None,
+        default='monologg/koelectra-base-v3-finetuned-korquad',
         metadata={
             "help": "Pretrained config name or path if not the same as model_name"
         },
     )
     tokenizer_name: Optional[str] = field(
-        default=None,
+        default='monologg/koelectra-base-v3-finetuned-korquad',
         metadata={
             "help": "Pretrained tokenizer name or path if not the same as model_name"
         },
@@ -47,7 +51,7 @@ class DataTrainingArguments:
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
     max_seq_length: int = field(
-        default=384,
+        default=256,
         metadata={
             "help": "The maximum total input sequence length after tokenization. Sequences longer "
             "than this will be truncated, sequences shorter will be padded."
