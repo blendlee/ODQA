@@ -21,6 +21,7 @@ from datasets import (
     load_from_disk,
     load_metric,
 )
+from QAmodel import *
 from retrieval import SparseRetrieval
 from trainer_qa import QuestionAnsweringTrainer
 from transformers import (
@@ -76,17 +77,16 @@ def main():
         else model_args.model_name_or_path,
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        model_args.tokenizer_name
-        if model_args.tokenizer_name
-        else model_args.model_name_or_path,
-        use_fast=True,
+        'monologg/koelectra-base-v3-finetuned-korquad'
+        #use_fast=True,
     )
+    
     model = AutoModelForQuestionAnswering.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
         config=config,
     )
-
+    #model.resize_token_embeddings(tokenizer.vocab_size + 2)
     # True일 경우 : run passage retrieval
     if data_args.eval_retrieval:
         #datasets = run_sparse_retrieval(
@@ -112,7 +112,7 @@ def run_colbert_retrieval(datasets):
     context = list(dict.fromkeys([v["text"] for v in wiki.values()]))
     print('wiki loaded!!!')
     rank = torch.load('/opt/ml/input/code/inferecne_colbert_rank.pth')
-    k = 5
+    k = 1
     passages=[]
 
     for idx in range(length):
